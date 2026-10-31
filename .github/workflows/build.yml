@@ -1,0 +1,50 @@
+name: Gerar APK ZEZO SERVERS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '*.zip'
+      - '.github/workflows/build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar Android
+        uses: android-actions/setup-android@v3
+
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Extrair projeto
+        run: |
+          mkdir extracted
+          unzip -q ./*.zip -d extracted
+          PROJECT_FILE=$(find extracted -type f -name settings.gradle | head -n 1)
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "Arquivo settings.gradle não encontrado"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(dirname "$PROJECT_FILE")" >> $GITHUB_ENV
+
+      - name: Compilar APK
+        run: gradle -p "$PROJECT_DIR" assembleDebug
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZEZO-SERVERS-APK
+          path: extracted/**/app/build/outputs/apk/debug/*.apk
