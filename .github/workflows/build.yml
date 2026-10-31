@@ -24,10 +24,21 @@ jobs:
 
       - name: Preparar Android
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Instalar pacotes Android
+        shell: bash
         run: |
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          set -e
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Aceitar licenças Android
+        shell: bash
+        run: |
           yes | sdkmanager --licenses || true
 
       - name: Preparar Gradle
@@ -35,7 +46,7 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extrair projeto
+      - name: Extrair projeto Android
         shell: bash
         run: |
           set -e
@@ -44,21 +55,26 @@ jobs:
           ZIP_FILE="ZEZO_SERVERS_FANTA_SENSI_BUILD_NUVEM.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "ZIP do projeto não encontrado: $ZIP_FILE"
+            echo "ERRO: ZIP do projeto não encontrado."
+            ls -la
             exit 1
           fi
 
           unzip -q "$ZIP_FILE" -d extracted
 
-          PROJECT_FILE=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -n 1)
+          PROJECT_FILE=$(find extracted -type f \
+            \( -name settings.gradle -o -name settings.gradle.kts \) \
+            | head -n 1)
 
           if [ -z "$PROJECT_FILE" ]; then
-            echo "Arquivo settings.gradle não encontrado."
+            echo "ERRO: settings.gradle não encontrado."
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$PROJECT_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          echo "Projeto encontrado em: $PROJECT_DIR"
 
       - name: Compilar APK
         shell: bash
@@ -73,16 +89,23 @@ jobs:
             gradle --no-daemon clean assembleDebug
           fi
 
-          mkdir -p "$GITHUB_WORKSPACE/apk-final"
+      - name: Localizar APK
+        shell: bash
+        run: |
+          set -e
+          mkdir -p apk-final
 
-          APK=$(find . -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
+          APK=$(find "$PROJECT_DIR" -type f \
+            -path '*/build/outputs/apk/debug/*.apk' \
+            | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "APK não foi encontrado após a compilação."
+            echo "ERRO: APK não foi gerado."
             exit 1
           fi
 
-          cp "$APK" "$GITHUB_WORKSPACE/apk-final/ZEZO-SERVERS.apk"
+          cp "$APK" apk-final/ZEZO-SERVERS.apk
+          echo "APK encontrado e preparado."
 
       - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
@@ -90,4 +113,3 @@ jobs:
           name: ZEZO-SERVERS-APK
           path: apk-final/ZEZO-SERVERS.apk
           if-no-files-found: error
-          
